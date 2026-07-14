@@ -47,6 +47,7 @@ endif
 MIHOMO_VER:=v1.19.9
 QLOAD_VER:=v1.0.0
 ZIVPN_VER:=udp-zivpn_1.4.9
+QSSH_VER:=v0.1.0
 
 YACD_VER:=gh-pages
 METACUBEXD_VER:=gh-pages
@@ -71,6 +72,7 @@ define Build/Prepare
 
 	curl -fL https://github.com/QcomWrt/Q-load/releases/download/$(QLOAD_VER)/q-load-linux-$(Q_ARCH) -o $(PKG_BUILD_DIR)/cores/q-load
 	curl -fL https://github.com/zahidbd2/udp-zivpn/releases/download/$(ZIVPN_VER)/udp-zivpn-linux-$(Z_ARCH) -o $(PKG_BUILD_DIR)/cores/zivpn
+	curl -fL https://github.com/QcomWrt/Q-SSH-WORKER/releases/download/$(QSSH_VER)/Q-SSH-WORKER-linux-$(Q_ARCH) -o $(PKG_BUILD_DIR)/cores/Q-SSH-WORKER
 
 	curl -fL https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/$(YACD_VER).tar.gz -o $(PKG_BUILD_DIR)/yacd.tar.gz
 	tar -xzf $(PKG_BUILD_DIR)/yacd.tar.gz -C $(PKG_BUILD_DIR)
@@ -105,6 +107,7 @@ define Package/luci-app-qtun/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/cores/clash_core $(1)/etc/qtun/core/clash
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/cores/q-load $(1)/etc/qtun/core/q-load
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/cores/zivpn $(1)/etc/qtun/core/zivpn
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/cores/Q-SSH-WORKER $(1)/etc/qtun/core/Q-SSH-WORKER
 
 	$(INSTALL_DIR) $(1)/etc/qtun/config/clash/ui/yacd
 	$(CP) $(PKG_BUILD_DIR)/ui/yacd/* $(1)/etc/qtun/config/clash/ui/yacd/
