@@ -19,7 +19,8 @@ s.addremove = false
 -- Dropdown Mode (Hanya sebagai pengalih tampilan)
 mode = s:option(ListValue, "mode_selector", "Config Mode")
 mode:value("ssh", "SSH Direct")
--- mode:value("clash", "Clash (Vmess/Vless/Trojan)")
+mode:value("q-ssh","Q SSH(proxy,payload)")
+mode:value("clash", "Clash / Mihomo")
 mode:value("zivpn", "ZiVPN (UDP)")
 
 -- Ambil mode aktif dari sistem hanya untuk dijadikan DEFAULT tampilan saat buka halaman
@@ -34,5 +35,6 @@ function mode.write() return end
 dofile("/usr/lib/lua/luci/model/cbi/qtun/ssh.lua")(s, mode)
 dofile("/usr/lib/lua/luci/model/cbi/qtun/mihomo.lua")(s, mode)
 dofile("/usr/lib/lua/luci/model/cbi/qtun/zivpn.lua")(s, mode)
+dofile("/usr/lib/lua/luci/model/cbi/qtun/q-ssh.lua")(s, mode)
 
 return m

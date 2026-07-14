@@ -1,0 +1,122 @@
+#!/bin/sh
+# /etc/qtun/action/backend.tun
+
+BIN="/usr/bin/sing-box"
+BACKEND_DIR="/etc/qtun/config/backend/tun"
+CONFIG_FILE="$BACKEND_DIR/config.json"
+PID_FILE="/etc/qtun/run/tun.pid"
+LOG_FILE="/etc/qtun/run/tun.log"
+
+# Port utama hasil gabungan q-load
+SOCKS_HOST="127.0.0.1"
+SOCKS_PORT="7777"
+
+log() {
+    /etc/qtun/action/logs.sh process "[backend.tun] $1"
+}
+
+is_running() {
+    [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null
+}
+
+prepare_dirs() {
+    mkdir -p "$BACKEND_DIR"
+    mkdir -p /etc/qtun/run
+}
+
+generate_tun_config() {
+    prepare_dirs
+
+    # Menghasilkan fail JSON konfigurasi Sing-Box TUN secara dinamik
+    cat <<EOF > "$CONFIG_FILE"
+{
+  "log": {
+    "level": "error",
+    "output": "$LOG_FILE",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "interface_name": "tun-qtun",
+      "inet4_address": "172.16.0.1/30",
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "system",
+      "sniff": true
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "proxy",
+      "server": "$SOCKS_HOST",
+      "server_port": $SOCKS_PORT,
+      "udp": true
+    }
+  ]
+}
+EOF
+}
+
+case "$1" in
+    start)
+        log "Starting TUN backend"
+
+        if [ ! -x "$BIN" ]; then
+            log "Sing-Box binary not found or not executable at $BIN"
+            exit 1
+        fi
+
+        generate_tun_config
+
+        if is_running; then
+            log "TUN backend is already running (PID: $(cat "$PID_FILE"))"
+            exit 0
+        fi
+
+        # Jalankan Sing-Box di latar belakang menggunakan config yang dijana
+        $BIN run -c "$CONFIG_FILE" >/dev/null 2>&1 &
+        echo "$!" > "$PID_FILE"
+
+        sleep 2
+        if is_running; then
+            log "TUN backend started successfully (PID: $(cat "$PID_FILE"))"
+        else
+            log "TUN backend failed to start. Check $LOG_FILE"
+            exit 1
+        fi
+        ;;
+
+    stop)
+        log "Stopping TUN backend"
+        if is_running; then
+            kill "$(cat "$PID_FILE")" 2>/dev/null
+            sleep 1
+        fi
+        
+        # Bersihkan fail PID dan folder runtime backend
+        rm -f "$PID_FILE"
+        rm -rf "$BACKEND_DIR"
+        log "TUN backend stopped and cleaned"
+        ;;
+
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+
+    status)
+        if is_running; then
+            log "Backend TUN status: RUNNING (PID: $(cat "$PID_FILE"))"
+        else
+            log "Backend TUN status: STOPPED"
+        fi
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac

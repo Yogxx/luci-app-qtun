@@ -1,0 +1,163 @@
+#!/bin/sh
+# /etc/qtun/action/backend.clash
+# QTUN Clash Backend - Adaptive Core Generator
+
+set -u
+
+BACKEND_DIR="/etc/qtun/config/backend/clash"
+BACKEND_CFG="$BACKEND_DIR/config.yaml"
+DEFAULT_CFG="/etc/qtun/config/clash/default/default.yaml"
+
+CLASH_BIN="/etc/qtun/core/clash"
+CLASH_LOG="/etc/qtun/run/clash.log"
+CLASH_PID="/etc/qtun/run/clash.pid"
+
+SOCKS_HOST="127.0.0.1"
+SOCKS_PORT="7777"
+CLASH_PORT="7892"
+
+log() {
+    /etc/qtun/action/logs.sh process "[backend.clash] $1"
+}
+
+is_running() {
+    [ -f "$CLASH_PID" ] && kill -0 "$(cat "$CLASH_PID" 2>/dev/null)" 2>/dev/null
+}
+
+prepare_dirs() {
+    mkdir -p "$BACKEND_DIR"
+    mkdir -p /etc/qtun/run
+}
+
+generate_backend_config() {
+    prepare_dirs
+
+    [ -f "$DEFAULT_CFG" ] || {
+        log "Default config not found: $DEFAULT_CFG"
+        return 1
+    }
+
+    # 1. Ambil preferensi user dari UCI (default ke tun jika tidak diisi)
+    USER_CLASH_MODE="$(uci -q get qtun.main.clash_mode 2>/dev/null)"
+    [ -z "$USER_CLASH_MODE" ] && USER_CLASH_MODE="tun"
+
+    # 2. Potong bagian routing bawaan default.yaml menggunakan awk
+    awk '
+        /^proxy-providers:/ { exit }
+        /^proxies:/ { exit }
+        /^proxy-groups:/ { exit }
+        /^rule-providers:/ { exit }
+        /^rules:/ { exit }
+        { print }
+    ' "$DEFAULT_CFG" > "$BACKEND_CFG"
+
+    # 3. Suntikkan parameter TUN sesuai pilihan user di UCI secara dinamis
+    if [ "$USER_CLASH_MODE" = "redirect" ]; then
+        log "User memilih REDIRECT Mode. Mematikan fitur TUN di config runtime..."
+        cat <<EOF >> "$BACKEND_CFG"
+
+# Override Mode Jaringan untuk REDIRECT
+redir-port: $CLASH_PORT
+tun:
+  enable: false
+EOF
+    else
+        log "User memilih TUN Mode. Mengaktifkan fitur TUN di config runtime..."
+        cat <<EOF >> "$BACKEND_CFG"
+
+# Override Mode Jaringan untuk TUN
+redir-port: 0
+tun:
+  enable: true
+  stack: system
+  device: tun-qtun
+  auto-route: true
+  strict-route: true
+EOF
+    fi
+
+    echo "" >> "$BACKEND_CFG"
+
+    # 4. Suntikkan core proxies aggregator q-load port 7777
+    cat <<EOF >> "$BACKEND_CFG"
+proxies:
+  - name: "QLOAD_AGGREGATOR"
+    type: socks5
+    server: $SOCKS_HOST
+    port: $SOCKS_PORT
+    udp: true
+
+proxy-groups:
+  - name: "QTUN_PROXY"
+    type: select
+    proxies:
+      - "QLOAD_AGGREGATOR"
+      - DIRECT
+
+rules:
+  - MATCH,QTUN_PROXY
+EOF
+
+    log "Backend config successfully generated at $BACKEND_CFG ($USER_CLASH_MODE mode)"
+    return 0
+}
+
+case "$1" in
+    start)
+        log "Starting Clash backend"
+        
+        [ -x "$CLASH_BIN" ] || {
+            log "Clash/Mihomo binary not found or not executable"
+            exit 1
+        }
+
+        generate_backend_config || exit 1
+
+        if is_running; then
+            kill "$(cat "$CLASH_PID")" 2>/dev/null
+        fi
+
+        # Jalankan core dengan folder home (-d) dan config file (-f) terisolasi
+        "$CLASH_BIN" -d "$BACKEND_DIR" -f "$BACKEND_CFG" > "$CLASH_LOG" 2>&1 &
+        echo "$!" > "$CLASH_PID"
+
+        sleep 2
+        if is_running; then
+            log "Clash backend running with PID $(cat "$CLASH_PID")"
+        else
+            log "Clash backend failed to start. Check $CLASH_LOG"
+            exit 1
+        fi
+        ;;
+
+    stop)
+        log "Stopping Clash backend"
+        if is_running; then
+            kill "$(cat "$CLASH_PID")" 2>/dev/null
+            sleep 1
+        fi
+        rm -f "$CLASH_PID"
+        # Bersihkan folder runtime backend agar storage tetap lega
+        rm -rf "$BACKEND_DIR"
+        log "Clash backend stopped and cleaned"
+        ;;
+
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+
+    status)
+        if is_running; then
+            log "Backend Clash status: RUNNING (PID: $(cat "$CLASH_PID"))"
+        else
+            log "Backend Clash status: STOPPED"
+        fi
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac

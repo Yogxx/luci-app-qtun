@@ -1,0 +1,163 @@
+mixed-port: 7890
+redir-port: 7892
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false
+
+external-controller: 0.0.0.0:9090
+external-ui: ./ui
+secret: ""
+
+unified-delay: true
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+proxies:
+  - name: TROJAN
+    type: trojan
+    server: sg-melbi002.gosni.web.id
+    port: 443
+    password: afika7g9z
+    skip-cert-verify: true
+    sni: live.iflix.com
+    network: ws
+    ws-opts:
+      path: /trojan-go
+      headers:
+        Host: sg-melbi002.gosni.web.id
+    udp: true
+
+  - name: VMESS
+    type: vmess
+    server: ava.game.naver.com
+    port: 443
+    uuid: b54118b9-a06f-4001-9661-cbf21d1965f6
+    alterId: 0
+    cipher: auto
+    tls: true
+    skip-cert-verify: true
+    servername: ava.game.naver.com.sg-leaseweb.hidexray.biz.id
+    network: ws
+    ws-opts:
+      path: /vmess
+      headers:
+        Host: ava.game.naver.com.sg-leaseweb.hidexray.biz.id
+    udp: true
+
+  - name: VLESS
+    type: vless
+    server: indo7.vpnjantit.com
+    port: 10004
+    uuid: 111e6fb8-db03-11f0-af8c-b34e84ef63e8
+    tls: false
+    skip-cert-verify: true
+    network: ws
+    ws-opts:
+      path: /vpnjantit
+      headers:
+        Host: ""
+    udp: true
+
+proxy-groups:
+
+  - name: QTUN-MODE
+    type: select
+    proxies:
+      - QTUN-PROXIES
+      - BALANCE
+      - FALLBACK
+      - BESTPING
+      - DIRECT
+
+  - name: QTUN-PROXIES
+    type: select
+    proxies:
+      - TROJAN
+      - VMESS
+      - VLESS
+      - DIRECT
+
+  - name: BALANCE
+    type: load-balance
+    strategy: round-robin
+    disable-udp: false
+    proxies:
+      - TROJAN
+      - VMESS
+      - VLESS
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+
+  - name: FALLBACK
+    type: fallback
+    disable-udp: false
+    proxies:
+      - TROJAN
+      - VMESS
+      - VLESS
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+
+  - name: BESTPING
+    type: url-test
+    disable-udp: false
+    proxies:
+      - TROJAN
+      - VMESS
+      - VLESS
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+
+dns:
+  enable: true
+  ipv6: false
+  listen: 0.0.0.0:1053
+
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "localhost.ptlogin2.qq.com"
+    - "time.windows.com"
+    - "pool.ntp.org"
+
+  default-nameserver:
+    - 1.1.1.1
+    - 8.8.8.8
+    - 223.5.5.5
+
+  nameserver:
+    - https://dns.google/dns-query
+    - https://1.1.1.1/dns-query
+    - 8.8.8.8
+
+  proxy-server-nameserver:
+    - 8.8.8.8
+
+  fallback:
+    - https://1.1.1.1/dns-query
+    - 9.9.9.9
+
+  fallback-filter:
+    geoip: true
+    ipcidr:
+      - 240.0.0.0/4
+
+rules:
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,169.254.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,224.0.0.0/4,DIRECT,no-resolve
+  - IP-CIDR,240.0.0.0/4,DIRECT,no-resolve
+
+  - DST-PORT,53,DIRECT
+
+  - MATCH,QTUN-MODE

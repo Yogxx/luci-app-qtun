@@ -3,17 +3,14 @@
 <div class="cbi-map">
     <h2>QTUN Dashboard</h2>
 
-    <!-- GRID -->
     <div class="grid">
 
-        <!-- NETWORK -->
         <div class="card">
             <h3>Status Jaringan</h3>
             <p>IP: <span id="pub-ip">Loading...</span></p>
             <p>ISP: <span id="isp-name">-</span></p>
         </div>
 
-        <!-- CORE STATUS -->
         <div class="card">
             <h3>Core Status</h3>
             <p>
@@ -26,47 +23,63 @@
             </p>
         </div>
 
-        <!-- CONTROL -->
         <div class="card">
             <h3>Control</h3>
 
-            <!-- MODE -->
             <label>Mode:</label>
-            <select id="mode" onchange="saveSettings()">
+            <select id="mode" onchange="toggleBackendOption(); saveSettings();" style="width:100%; margin-top:5px;">
                 <option value="zivpn">ZiVPN</option>
+                <option value="q-ssh">Q SSH</option>
                 <option value="clash">Clash</option>
-                <option value="ssh">SSH</option>
+                <option value="ssh">SSH Direct</option>
+                <!-- <option value="ssh_ws">SSH WebSocket</option>
+                <option value="ssh_ssl">SSH SSL</option> -->
             </select>
 
-            <!-- AUTOSTART -->
-            <div style="margin-top:10px;">
+            <div id="backend-option-field" style="margin-top:10px; display:none;">
+                <label>Backend Engine:</label>
+                <select id="backend" onchange="saveSettings()" style="width:100%; margin-top:5px;">
+                    <option value="clash">Clash / Mihomo Core</option>
+                    <option value="tun">Sing-Box TUN Core</option>
+                </select>
+            </div>
+
+            <div style="margin-top:12px;">
                 <label>
                     <input type="checkbox" id="autostart" onchange="saveSettings()">
                     Auto Start
                 </label>
             </div>
 
-            <!-- BUTTON -->
             <div style="margin-top:15px;">
                 <button class="cbi-button cbi-button-apply" onclick="startTunnel()">Start</button>
                 <button class="cbi-button cbi-button-reset" onclick="stopTunnel()">Stop</button>
             </div>
         </div>
+
+        <div id="clash-profile-card" class="card" style="display:none;">
+            <h3>Clash Profile</h3>
+            <p>
+                Active:
+                <b><span id="clash-profile-active">-</span></b>
+            </p>
+            <label>Config:</label>
+            <select id="clash-profile-select" style="width:100%; margin-top:5px;"></select>
+            <div style="margin-top:15px;">
+                <button class="cbi-button cbi-button-apply" onclick="setClashProfile()">
+                    Set Config
+                </button>
+            </div>
+            <p id="clash-profile-status" style="margin-top:10px;font-weight:bold;"></p>
+        </div>
     </div>
-    <!-- DASHBOARD ACCESS -->
+
     <div id="clash-dashboard-card" class="card" style="margin-top:10px; display:none;">
         <h3>Clash Dashboard</h3>
-
         <p>Akses Web UI Clash:</p>
-
         <div class="clash-btn-group">
-            <button class="clash-btn yacd-btn" onclick="openYacd()">
-                Open YACD
-            </button>
-
-            <button class="clash-btn metacubexd-btn" onclick="openMetacubexd()">
-                Open metacubexd
-            </button>
+            <button class="clash-btn yacd-btn" onclick="openYacd()">Open YACD</button>
+            <button class="clash-btn metacubexd-btn" onclick="openMetacubexd()">Open metacubexd</button>
         </div>
     </div>
 </div>
@@ -99,7 +112,6 @@
     background: #f44336;
     color: white;
 }
-
 
 .clash-btn-group {
     display: flex;
@@ -134,7 +146,6 @@
     background: #9C27B0;
     color: white;
 }
-
 </style>
 
 <script type="text/javascript">
@@ -176,14 +187,38 @@ const IP = {
                 IP.updateUI(data);
             } else {
                 document.getElementById('pub-ip').innerHTML = "Gagal mengambil IP";
-                document.getElementById('isp-name').innerHTML = "Silahkan Cek koneksi internat anda";
+                document.getElementById('isp-name').innerHTML = "Silahkan Cek koneksi internet anda";
             }
         });
     }
 };
 
+/* SAKELAR VISIBILITAS DROPDOWN BACKEND */
+// function toggleBackendOption() {
+//     let mode = document.getElementById("mode").value;
+//     let backendField = document.getElementById("backend-option-field");
+    
+//     // MUNCUL di semua mode, KECUALI zivpn dan clash murni
+//     if (mode !== "zivpn" && mode !== "clash" && mode !== "q-ssh") {
+//         backendField.style.display = "block";
+//     } else {
+//         backendField.style.display = "none";
+//     }
+// }
 
-/* SAVE MODE + ENABLED */
+function toggleBackendOption() {
+    let mode = document.getElementById("mode").value;
+    let backendField = document.getElementById("backend-option-field");
+    
+    // SEMBUNYIKAN dropdown backend jika mode adalah zivpn, clash, atau q-ssh
+    if (mode === "zivpn" || mode === "clash" || mode === "q-ssh") {
+        backendField.style.display = "none";
+    } else {
+        backendField.style.display = "block";
+    }
+}
+
+/* SAVE MODE + ENABLED + BACKEND */
 function saveSettings() {
     let modeSelect = document.getElementById("mode");
 
@@ -194,16 +229,38 @@ function saveSettings() {
 
     let mode = modeSelect.value;
     let enabled = document.getElementById("autostart").checked ? "1" : "0";
+    let backend = document.getElementById("backend").value;
 
     XHR.post('<%=luci.dispatcher.build_url("admin/services/qtun/set_config")%>', {
         mode: mode,
-        enabled: enabled
+        enabled: enabled,
+        backend: backend
     }, function(x) {});
+}
+
+function setClashProfile() {
+    let profile = document.getElementById("clash-profile-select").value;
+    let status = document.getElementById("clash-profile-status");
+
+    if (!profile) {
+        status.style.color = "red";
+        status.innerHTML = "Config belum dipilih";
+        return;
+    }
+
+    status.style.color = "green";
+    status.innerHTML = "Applying config...";
+
+    XHR.post('<%=luci.dispatcher.build_url("admin/services/qtun/set_config")%>', {
+        clash_profile: profile
+    }, function(x, data) {
+        restartTunnel();
+        status.innerHTML = "Config applied: " + profile;
+    });
 }
 
 let coreActionState = "idle"; 
 
-/* START */
 function startTunnel() {
     coreActionState = "starting";
 
@@ -217,7 +274,6 @@ function startTunnel() {
     });
 }
 
-/* STOP */
 function stopTunnel() {
     coreActionState = "stopping";
 
@@ -231,7 +287,6 @@ function stopTunnel() {
     });
 }
 
-/* RESTART */
 function restartTunnel() {
     coreActionState = "starting";
 
@@ -245,7 +300,6 @@ function restartTunnel() {
     });
 }
 
-
 function openYacd() {
     window.open('http://' + window.location.hostname + ':9090/ui/yacd', '_blank');
 }
@@ -254,7 +308,7 @@ function openMetacubexd() {
     window.open('http://' + window.location.hostname + ':9090/ui/metacubexd', '_blank');
 }
 
-/* STATUS FETCH (Hanya untuk Core) */
+/* STATUS FETCH POLLING */
 function fetchData() {
     XHR.get('<%=luci.dispatcher.build_url("admin/services/qtun/status")%>', null,
         function(x, data) {
@@ -262,17 +316,23 @@ function fetchData() {
 
             /* MODE + AUTOSTART */
             document.getElementById("mode-active").innerHTML = data.mode || "-";
-            if (data.mode) document.getElementById("mode").value = data.mode;
+            if (data.mode) {
+                document.getElementById("mode").value = data.mode;
+                toggleBackendOption(); // Sinkronkan status display dropdown backend
+            }
 
             let enabled = (data.enabled == "1");
             document.getElementById("autostart").checked = enabled;
+
+            if (data.backend) {
+                document.getElementById("backend").value = data.backend;
+            }
 
             let statusEl = document.getElementById("core-status");
 
             /* =========================
                STATUS ENGINE
             ========================= */
-
             if (coreActionState === "starting") {
                 if (data.running) {
                     statusEl.innerHTML = "Running";
@@ -312,13 +372,7 @@ function fetchData() {
                CLASH DASHBOARD CARD
             ========================= */
             let clashCard = document.getElementById("clash-dashboard-card");
-
-            if (data.clash_running) {
-                clashCard.style.display = "block";
-            } else {
-                clashCard.style.display = "none";
-            }
-
+            clashCard.style.display = data.clash_running ? "block" : "none";
 
             let modeSelect = document.getElementById("mode");
 
@@ -333,6 +387,40 @@ function fetchData() {
                 modeSelect.style.opacity = "1";
                 modeSelect.style.cursor = "pointer";
             }
+
+            /* =========================
+               CLASH PROFILE CARD
+            ========================= */
+            let clashProfileCard = document.getElementById("clash-profile-card");
+            let clashProfileSelect = document.getElementById("clash-profile-select");
+            let clashProfileActive = document.getElementById("clash-profile-active");
+
+            if (data.mode === "clash") {
+                clashProfileCard.style.display = "block";
+                clashProfileActive.innerHTML = data.clash_profile || "-";
+                clashProfileSelect.innerHTML = "";
+
+                if (data.clash_profiles && data.clash_profiles.length > 0) {
+                    data.clash_profiles.forEach(function(p) {
+                        let opt = document.createElement("option");
+                        opt.value = p;
+                        opt.text = p;
+
+                        if (p === data.clash_profile) {
+                            opt.selected = true;
+                        }
+
+                        clashProfileSelect.appendChild(opt);
+                    });
+                } else {
+                    let opt = document.createElement("option");
+                    opt.value = "";
+                    opt.text = "Belum ada config";
+                    clashProfileSelect.appendChild(opt);
+                }
+            } else {
+                clashProfileCard.style.display = "none";
+            }
         }
     );
 }
@@ -345,7 +433,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
     fetchData();
     IP.getIPInfo();
 });
-
 </script>
 
 <%+footer%>

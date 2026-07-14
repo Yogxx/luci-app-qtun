@@ -1,5 +1,6 @@
 #!/bin/sh
 # /etc/qtun/action/logs.sh
+# QTUN Adaptive Logger - Dynamic Core Optimization
 
 MAX_LINES=100
 TRIM_TO=80
@@ -14,7 +15,7 @@ trim_file() {
 
     lines=$(wc -l < "$file" 2>/dev/null)
 
-    if [ "$lines" -gt "$MAX_LINES" ]; then
+    if [ "${lines:-0}" -gt "$MAX_LINES" ]; then
         tail -n "$TRIM_TO" "$file" > "$file.tmp" && mv "$file.tmp" "$file"
     fi
 }
@@ -39,10 +40,20 @@ case "$1" in
         trim_file "$target_file"
         ;;
     clear)
-        : > "$RUN_DIR/qtun_live.log"
-        : > "$RUN_DIR/zivpn.log"
-        : > "$RUN_DIR/q-load.log"
-        : > "$RUN_DIR/clash.log"
+        # =========================================================
+        # OPTIMALISASI DINAMIS: Bersihkan semua berkas log (.log)
+        # yang ada di folder runtime tanpa perlu hardcode nama core.
+        # =========================================================
+        if ls "$RUN_DIR"/*.log >/dev/null 2>&1; then
+            for file in "$RUN_DIR"/*.log; do
+                if [ -f "$file" ]; then
+                    : > "$file"
+                fi
+            done
+            echo "[QTUN] All dynamic core runtime logs successfully cleared"
+        else
+            echo "[QTUN] No logs found to clear"
+        fi
         ;;
     *)
         echo "Usage: $0 {process|rotate|clear}"

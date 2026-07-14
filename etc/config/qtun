@@ -1,2 +1,9 @@
 config global 'main'
-    option mode 'zivpn'
+    option enabled '0'
+    option mode 'clash'
+    option backend 'clash'
+    option clash_mode 'tun'
+
+
+config clash 'clash'
+    option profile 'standard_fake_(7).yaml'
